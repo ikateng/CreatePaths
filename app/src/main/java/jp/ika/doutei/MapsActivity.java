@@ -17,6 +17,8 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
@@ -28,7 +30,9 @@ public class MapsActivity extends FragmentActivity{
 	private final float DEFAULT_ZOOM_LEVEL = 14;
 	private GoogleMap mMap; // Might be null if Google Play services APK is not available.
 	private MainData data;
+	private LatLng lastPosition;
 	private ArrayList<Polyline> previousPolylines;
+	private Circle previousCircle;
 	private float lineWidth;
 	private Receiver receiver;
 
@@ -137,18 +141,25 @@ public class MapsActivity extends FragmentActivity{
 		if(!previousPolylines.isEmpty())
 			for(Polyline p : previousPolylines)
 				p.remove();
+		if(previousCircle != null)
+			previousCircle.remove();
 
 		PolylineOptions geodesics;
 		for(PositionList pl : data.positionLists){
 			geodesics = new PolylineOptions()
 					.geodesic(true)
 					.color(Color.GREEN)
-					.width(lineWidth);
+					.width(lineWidth)
+					.zIndex(1);
 
 			for(double[] pos : pl){
 				geodesics.add(new LatLng(pos[0], pos[1]));
 			}
 			previousPolylines.add(mMap.addPolyline(geodesics));
+		}
+
+		if(lastPosition != null){
+			previousCircle = mMap.addCircle(new CircleOptions().center(lastPosition).fillColor(Color.CYAN).radius(3).strokeColor(Color.BLUE).strokeWidth(lineWidth / 20).zIndex(2));
 		}
 
 	}
@@ -180,6 +191,7 @@ public class MapsActivity extends FragmentActivity{
 	}
 
 	void addNewPosition(double[] location){
+		lastPosition = new LatLng(location[0], location[1]);
 		data.addPosition(location);
 	}
 
