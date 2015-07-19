@@ -1,5 +1,8 @@
 package jp.ika.doutei;
 
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.location.Location;
@@ -25,6 +28,7 @@ public class MyService extends Service implements GoogleApiClient
 	private GoogleApiClient googleApiClient;
 	private LocationRequest locationRequest;
 	private MainData data;
+	private NotificationManager nm;
 
 	@Override
 	public IBinder onBind(Intent intent) {
@@ -49,6 +53,9 @@ public class MyService extends Service implements GoogleApiClient
 				.setInterval(10000)
 				.setFastestInterval(5000)
 				.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+
+		nm = (NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+		showNotification();
 	}
 
 	@Override
@@ -76,6 +83,7 @@ public class MyService extends Service implements GoogleApiClient
 		data.save(this);
 		stopLocationUpdates();
 		googleApiClient.disconnect();
+		nm.cancel(1);
 	}
 
 	@Override
@@ -117,5 +125,21 @@ public class MyService extends Service implements GoogleApiClient
 		Intent intent = new Intent(ACTION);
 		intent.putExtra("location", new double[]{location.getLatitude(), location.getLongitude()});
 		sendBroadcast(intent);
+	}
+
+	private void showNotification() {
+		Log.d(TAG, "showNotification");
+		PendingIntent intent = PendingIntent.getActivity(this, 0, new Intent(this,
+				MapsActivity.class), 0);
+
+		Notification notification= new Notification.Builder(this)
+				.setSmallIcon(R.mipmap.ic_launcher)
+				.setContentTitle(getString(R.string.app_name))
+				.setContentText("Now Tracing...")
+				.setContentIntent(intent)
+				.build();
+
+		notification.flags = Notification.FLAG_ONGOING_EVENT;
+		nm.notify(1, notification);
 	}
 }
