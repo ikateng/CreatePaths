@@ -1,5 +1,8 @@
 package jp.ika.doutei;
 
+import android.app.ActivityManager;
+import android.app.ActivityManager.RunningServiceInfo;
+import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
@@ -61,19 +64,31 @@ public class MapsActivity extends FragmentActivity{
 
 		switch (item.getItemId()) {
 			case 0:
+				if(isServiceRunning(MyService.class)) break;
+
 				if(data.positions.size() != 0)
 					data.addPositionList();
 
-				Intent intent = new Intent(this, MyService.class);
-				intent.putExtra("data", data);
-				startService(intent);
+				Intent intent1 = new Intent(this, MyService.class);
+				intent1.putExtra("data", data);
+				startService(intent1);
 				Toast.makeText(this, "ON", Toast.LENGTH_LONG).show();
 				return true;
 			case 1:
+				if(!isServiceRunning(MyService.class)) break;
+
 				stopService(new Intent(this, MyService.class));
 				Toast.makeText(this, "OFF", Toast.LENGTH_LONG).show();
 				return true;
 			case 2:
+				MainData.deleteFile(this);
+				data = MainData.newInstance(this);
+				drawLines();
+				if(isServiceRunning(MyService.class)){
+					Intent intent2 = new Intent(this, MyService.class);
+					intent2.putExtra("data", data);
+					startService(intent2);
+				}
 				Toast.makeText(this, "CLEAR", Toast.LENGTH_LONG).show();
 				return true;
 		}
@@ -166,5 +181,15 @@ public class MapsActivity extends FragmentActivity{
 
 	void addNewPosition(double[] location){
 		data.addPosition(location);
+	}
+
+	private boolean isServiceRunning(Class<?> serviceClass) {
+		ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+		for (RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+			if (serviceClass.getName().equals(service.service.getClassName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 }
