@@ -3,8 +3,6 @@ package jp.ika.doutei;
 import android.content.Context;
 import android.location.Location;
 
-import com.google.android.gms.maps.model.LatLng;
-
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,10 +16,12 @@ import java.util.ArrayList;
  */
 public class MainData implements Serializable{
 	public static final String dataFileName = "doutei_data";
-	public ArrayList<double[]> positions;
+	public ArrayList<PositionList> positionLists;
+	public PositionList positions;
 
 	MainData(){
-		positions = new ArrayList<>();
+		positionLists = new ArrayList<>();
+		addPositionList();
 	}
 
 	static public MainData newInstance(Context context){
@@ -79,19 +79,16 @@ public class MainData implements Serializable{
 		return true;
 	}
 
+	public void addPositionList(){
+		positions = new PositionList();
+		positionLists.add(positions);
+	}
+
 	public void addPosition(double[] location){
 		positions.add(location);
 	}
 
 	public void addPosition(Location location){
 		positions.add(new double[]{location.getLatitude(), location.getLongitude()});
-	}
-
-	public void clear(){
-		positions.clear();
-	}
-
-	public LatLng getLatLng(int index){
-		return new LatLng(positions.get(index)[0], positions.get(index)[1]);
 	}
 }

@@ -35,6 +35,7 @@ public class MyService extends Service implements GoogleApiClient
 
 	@Override
 	public void onCreate() {
+		super.onCreate();
 		Log.i(TAG, "onCreate");
 		Toast.makeText(this, "MyService#onCreate", Toast.LENGTH_SHORT).show();
 
@@ -48,8 +49,6 @@ public class MyService extends Service implements GoogleApiClient
 				.setInterval(10000)
 				.setFastestInterval(5000)
 				.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-
-		data = MainData.newInstance(this);
 	}
 
 	@Override
@@ -57,6 +56,11 @@ public class MyService extends Service implements GoogleApiClient
 		super.onStartCommand(intent, flags, startId);
 		Log.i(TAG, "onStartCommand Received start id " + startId + ": " + intent);
 		Toast.makeText(this, "MyService#onStartCommand", Toast.LENGTH_SHORT).show();
+
+		if(intent != null)
+			data = (MainData)intent.getSerializableExtra("data");
+		else if(data == null)
+			data = MainData.newInstance(this);
 
 		if (!googleApiClient.isConnected() || !googleApiClient.isConnecting())
 			googleApiClient.connect();
@@ -66,8 +70,10 @@ public class MyService extends Service implements GoogleApiClient
 
 	@Override
 	public void onDestroy() {
+		super.onDestroy();
 		Log.i(TAG, "onDestroy");
 		Toast.makeText(this, "MyService#onDestroy", Toast.LENGTH_SHORT).show();
+		data.save(this);
 		stopLocationUpdates();
 		googleApiClient.disconnect();
 	}

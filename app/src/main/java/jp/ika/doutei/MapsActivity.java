@@ -18,12 +18,14 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 
+import java.util.ArrayList;
+
 public class MapsActivity extends FragmentActivity{
 	private final static String TAG = "MainActivity";
 	private final float DEFAULT_ZOOM_LEVEL = 14;
 	private GoogleMap mMap; // Might be null if Google Play services APK is not available.
 	private MainData data;
-	private Polyline previousPolyline;
+	private ArrayList<Polyline> previousPolylines;
 	private float lineWidth;
 	private Receiver receiver;
 
@@ -36,8 +38,11 @@ public class MapsActivity extends FragmentActivity{
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(MyService.ACTION);
 		registerReceiver(receiver, filter);
+
 		//MainData.deleteFile(this);
 		data = MainData.newInstance(this);
+
+		previousPolylines = new ArrayList<>();
 		calcLineWidth(DEFAULT_ZOOM_LEVEL);
 		setUpMapIfNeeded();
 	}
@@ -56,7 +61,12 @@ public class MapsActivity extends FragmentActivity{
 
 		switch (item.getItemId()) {
 			case 0:
-				startService(new Intent(this, MyService.class));
+				if(data.positions.size() != 0)
+					data.addPositionList();
+
+				Intent intent = new Intent(this, MyService.class);
+				intent.putExtra("data", data);
+				startService(intent);
 				Toast.makeText(this, "ON", Toast.LENGTH_LONG).show();
 				return true;
 			case 1:
@@ -109,19 +119,23 @@ public class MapsActivity extends FragmentActivity{
 	}
 
 	public void drawLines(){
-		Log.i(TAG, "drawLines");
-		if(previousPolyline != null)
-			previousPolyline.remove();
+		if(!previousPolylines.isEmpty())
+			for(Polyline p : previousPolylines)
+				p.remove();
 
-		PolylineOptions geodesics = new PolylineOptions()
-				.geodesic(true)
-				.color(Color.GREEN)
-				.width(lineWidth);
+		PolylineOptions geodesics;
+		for(PositionList pl : data.positionLists){
+			geodesics = new PolylineOptions()
+					.geodesic(true)
+					.color(Color.GREEN)
+					.width(lineWidth);
 
-		for(int i = 0; i < data.positions.size() - 1; i++){
-			geodesics.add(data.getLatLng(i), data.getLatLng(i+1));
+			for(double[] pos : pl){
+				geodesics.add(new LatLng(pos[0], pos[1]));
+			}
+			previousPolylines.add(mMap.addPolyline(geodesics));
 		}
-		previousPolyline = mMap.addPolyline(geodesics);
+
 	}
 
 	@Override
