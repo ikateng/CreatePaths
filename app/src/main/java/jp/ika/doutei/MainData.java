@@ -111,6 +111,16 @@ public class MainData implements Serializable{
 				smo.setPosition(m.getPosition())
 						.setTitle(m.getTitle())
 						.setSnippet(m.getSnippet());
+				return;
+			}
+		}
+	}
+
+	public void deleteMarkerOptions(Marker m){
+		for(SerializableMarkerOptions smo : markerOptionsList){
+			if(smo.id.equals(m.getId())){
+				markerOptionsList.remove(markerOptionsList.indexOf(smo));
+				return;
 			}
 		}
 	}

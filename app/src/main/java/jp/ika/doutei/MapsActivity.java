@@ -98,11 +98,9 @@ public class MapsActivity extends FragmentActivity{
 			case 2:
 				MainData.deleteFile(this);
 				data = MainData.newInstance(this);
-				for(Marker m : markerList)
-					m.remove();
+				clearMarkers();
 				drawLines();
-				if(isServiceRunning(MyService.class))
-					sendData();
+				if(isServiceRunning(MyService.class)) sendData();
 
 				Toast.makeText(this, "CLEAR", Toast.LENGTH_LONG).show();
 				return true;
@@ -120,8 +118,7 @@ public class MapsActivity extends FragmentActivity{
 							markerList.add(marker);
 							data.addMarkerOptions(mo, marker);
 							data.save(mapsActivity);
-							if(isServiceRunning(MyService.class))
-								sendData();
+							if(isServiceRunning(MyService.class)) sendData();
 
 							markerAction = false;
 							mMap.setOnMapClickListener(null);
@@ -170,7 +167,6 @@ public class MapsActivity extends FragmentActivity{
 		mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener(){
 			@Override
 			public void onInfoWindowClick(Marker marker){
-				Log.i(TAG, "onInfoWindowClick");
 
 				LayoutInflater li = (LayoutInflater)getBaseContext()
 						.getSystemService(LAYOUT_INFLATER_SERVICE);
@@ -188,7 +184,6 @@ public class MapsActivity extends FragmentActivity{
 				ok.setOnClickListener(new Button.OnClickListener(){
 					@Override
 					public void onClick(View v){
-						Log.i(TAG, "ok");
 						m.setTitle(titleEdit.getText().toString());
 						m.setSnippet(snippetEdit.getText().toString());
 						m.hideInfoWindow();
@@ -196,8 +191,7 @@ public class MapsActivity extends FragmentActivity{
 
 						data.updateMarkerOptions(m);
 						data.save(mapsActivity);
-						if(isServiceRunning(MyService.class))
-							sendData();
+						if(isServiceRunning(MyService.class)) sendData();
 
 						popupWindow.dismiss();
 					}
@@ -206,7 +200,20 @@ public class MapsActivity extends FragmentActivity{
 				cancel.setOnClickListener(new Button.OnClickListener(){
 					@Override
 					public void onClick(View v){
-						Log.i(TAG, "canceled");
+						popupWindow.dismiss();
+					}
+				});
+				Button delete = (Button)popupView.findViewById(R.id.delete);
+				delete.setOnClickListener(new View.OnClickListener(){
+					@Override
+					public void onClick(View view){
+						data.deleteMarkerOptions(m);
+						data.save(mapsActivity);
+						if(isServiceRunning(MyService.class)) sendData();
+
+						clearMarkers();
+						showMarkers();
+
 						popupWindow.dismiss();
 					}
 				});
@@ -260,6 +267,10 @@ public class MapsActivity extends FragmentActivity{
 		}
 	}
 
+	private void clearMarkers(){
+		for(Marker m : markerList) m.remove();
+	}
+
 	private void showMarkers(){
 		Log.i(TAG, "showMarkers");
 		Marker marker;
@@ -288,15 +299,17 @@ public class MapsActivity extends FragmentActivity{
 	@Override
 	protected void onPause() {
 		super.onPause();
-		if(popupWindow != null && popupWindow.isShowing())
-			popupWindow.dismiss();
 		Log.i(TAG, "onPause");
 	}
 
 	@Override
 	protected void onStop() {
 		super.onStop();
-		unregisterReceiver(receiver);
+		if(popupWindow != null && popupWindow.isShowing())
+			popupWindow.dismiss();
+		try{
+			unregisterReceiver(receiver);
+		}catch(IllegalArgumentException e){}
 		Log.i(TAG, "onStop");
 	}
 
