@@ -42,6 +42,7 @@ public class MapsActivity extends FragmentActivity{
 	private float lineWidth;
 	private Receiver receiver;
 	private boolean markerAction;
+	private ArrayList<Marker> markerList;
 	private PopupWindow popupWindow;
 
 	@Override
@@ -58,6 +59,7 @@ public class MapsActivity extends FragmentActivity{
 		data = MainData.newInstance(this);
 
 		previousPolylines = new ArrayList<>();
+		markerList = new ArrayList<>();
 		markerAction = false;
 		calcLineWidth(DEFAULT_ZOOM_LEVEL);
 		setUpMapIfNeeded();
@@ -96,6 +98,8 @@ public class MapsActivity extends FragmentActivity{
 			case 2:
 				MainData.deleteFile(this);
 				data = MainData.newInstance(this);
+				for(Marker m : markerList)
+					m.remove();
 				drawLines();
 				if(isServiceRunning(MyService.class))
 					sendData();
@@ -109,9 +113,12 @@ public class MapsActivity extends FragmentActivity{
 						@Override
 						public void onMapClick(LatLng latLng){
 							MarkerOptions mo = new MarkerOptions().position(latLng)
-									.title("title")
-									.snippet("snippet");
-							data.addMarkerOptions(mo, mMap.addMarker(mo));
+									.title("New Marker")
+									.snippet("");
+							Marker marker = mMap.addMarker(mo);
+							marker.setDraggable(true);
+							markerList.add(marker);
+							data.addMarkerOptions(mo, marker);
 							data.save(mapsActivity);
 							if(isServiceRunning(MyService.class))
 								sendData();
@@ -187,7 +194,7 @@ public class MapsActivity extends FragmentActivity{
 						m.hideInfoWindow();
 						m.showInfoWindow();
 
-						data.editMarkerOptions(m);
+						data.updateMarkerOptions(m);
 						data.save(mapsActivity);
 						if(isServiceRunning(MyService.class))
 							sendData();
@@ -208,6 +215,22 @@ public class MapsActivity extends FragmentActivity{
 				popupWindow.setWidth(findViewById(R.id.map).getWidth() - 40);
 				popupWindow.update();
 				popupWindow.showAtLocation(findViewById(R.id.map), Gravity.CENTER, 0, 0);
+			}
+		});
+
+		mMap.setOnMarkerDragListener(new GoogleMap.OnMarkerDragListener(){
+			@Override
+			public void onMarkerDragStart(Marker marker){}
+
+			@Override
+			public void onMarkerDrag(Marker marker){}
+
+			@Override
+			public void onMarkerDragEnd(Marker marker){
+				data.updateMarkerOptions(marker);
+				data.save(mapsActivity);
+				if(isServiceRunning(MyService.class))
+					sendData();
 			}
 		});
 
@@ -243,6 +266,8 @@ public class MapsActivity extends FragmentActivity{
 		for(SerializableMarkerOptions smo : data.markerOptionsList){
 			marker = mMap.addMarker(smo.toMarkerOptions());
 			smo.setId(marker.getId());
+			marker.setDraggable(true);
+			markerList.add(marker);
 		}
 	}
 

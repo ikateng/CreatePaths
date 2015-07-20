@@ -105,7 +105,7 @@ public class MainData implements Serializable{
 				.setId(m.getId()));
 	}
 
-	public void editMarkerOptions(Marker m){
+	public void updateMarkerOptions(Marker m){
 		for(SerializableMarkerOptions smo : markerOptionsList){
 			if(smo.id.equals(m.getId())){
 				smo.setPosition(m.getPosition())
