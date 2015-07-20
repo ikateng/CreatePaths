@@ -3,6 +3,9 @@ package jp.ika.doutei;
 import android.content.Context;
 import android.location.Location;
 
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,9 +21,11 @@ public class MainData implements Serializable{
 	public static final String dataFileName = "doutei_data";
 	public ArrayList<PositionList> positionLists;
 	public PositionList positions;
+	public ArrayList<SerializableMarkerOptions> markerOptionsList;
 
 	MainData(){
 		positionLists = new ArrayList<>();
+		markerOptionsList = new ArrayList<>();
 		addPositionList();
 	}
 
@@ -90,5 +95,23 @@ public class MainData implements Serializable{
 
 	public void addPosition(Location location){
 		positions.add(new double[]{location.getLatitude(), location.getLongitude()});
+	}
+
+	public void addMarkerOptions(MarkerOptions mo, Marker m){
+		markerOptionsList.add(new SerializableMarkerOptions()
+				.setPosition(mo.getPosition())
+				.setTitle(mo.getTitle())
+				.setSnippet(mo.getSnippet())
+				.setId(m.getId()));
+	}
+
+	public void editMarkerOptions(Marker m){
+		for(SerializableMarkerOptions smo : markerOptionsList){
+			if(smo.id.equals(m.getId())){
+				smo.setPosition(m.getPosition())
+						.setTitle(m.getTitle())
+						.setSnippet(m.getSnippet());
+			}
+		}
 	}
 }

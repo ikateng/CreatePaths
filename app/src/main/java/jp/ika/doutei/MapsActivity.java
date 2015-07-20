@@ -1,7 +1,6 @@
 package jp.ika.doutei;
 
 import android.app.ActivityManager;
-import android.app.ActivityManager.RunningServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -9,17 +8,25 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
+import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup.LayoutParams;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.PopupWindow;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CameraPosition;
-import com.google.android.gms.maps.model.Circle;
-import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 
@@ -27,14 +34,15 @@ import java.util.ArrayList;
 
 public class MapsActivity extends FragmentActivity{
 	private final static String TAG = "MainActivity";
+	final MapsActivity mapsActivity = this;
 	private final float DEFAULT_ZOOM_LEVEL = 14;
 	private GoogleMap mMap; // Might be null if Google Play services APK is not available.
 	private MainData data;
-	private LatLng lastPosition;
 	private ArrayList<Polyline> previousPolylines;
-	private Circle previousCircle;
 	private float lineWidth;
 	private Receiver receiver;
+	private boolean markerAction;
+	private PopupWindow popupWindow;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState){
@@ -50,6 +58,7 @@ public class MapsActivity extends FragmentActivity{
 		data = MainData.newInstance(this);
 
 		previousPolylines = new ArrayList<>();
+		markerAction = false;
 		calcLineWidth(DEFAULT_ZOOM_LEVEL);
 		setUpMapIfNeeded();
 	}
@@ -60,6 +69,7 @@ public class MapsActivity extends FragmentActivity{
 		menu.add(Menu.NONE, 0, Menu.NONE, "ON");
 		menu.add(Menu.NONE, 1, Menu.NONE, "OFF");
 		menu.add(Menu.NONE, 2, Menu.NONE, "CLEAR");
+		menu.add(Menu.NONE, 3, Menu.NONE, "MARKER");
 
 		return true;
 	}
@@ -70,12 +80,11 @@ public class MapsActivity extends FragmentActivity{
 			case 0:
 				if(isServiceRunning(MyService.class)) break;
 
+				// positionListを更新して線を分断する
 				if(data.positions.size() != 0)
 					data.addPositionList();
 
-				Intent intent1 = new Intent(this, MyService.class);
-				intent1.putExtra("data", data);
-				startService(intent1);
+				sendData();
 				Toast.makeText(this, "ON", Toast.LENGTH_LONG).show();
 				return true;
 			case 1:
@@ -88,12 +97,32 @@ public class MapsActivity extends FragmentActivity{
 				MainData.deleteFile(this);
 				data = MainData.newInstance(this);
 				drawLines();
-				if(isServiceRunning(MyService.class)){
-					Intent intent2 = new Intent(this, MyService.class);
-					intent2.putExtra("data", data);
-					startService(intent2);
-				}
+				if(isServiceRunning(MyService.class))
+					sendData();
+
 				Toast.makeText(this, "CLEAR", Toast.LENGTH_LONG).show();
+				return true;
+			case 3:
+				markerAction = !markerAction;
+				if(markerAction){
+					mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener(){
+						@Override
+						public void onMapClick(LatLng latLng){
+							MarkerOptions mo = new MarkerOptions().position(latLng)
+									.title("title")
+									.snippet("snippet");
+							data.addMarkerOptions(mo, mMap.addMarker(mo));
+							data.save(mapsActivity);
+							if(isServiceRunning(MyService.class))
+								sendData();
+
+							markerAction = false;
+							mMap.setOnMapClickListener(null);
+						}
+					});
+				}else{
+					mMap.setOnMapClickListener(null);
+				}
 				return true;
 		}
 		return false;
@@ -115,9 +144,10 @@ public class MapsActivity extends FragmentActivity{
 		mMap.getUiSettings().setZoomControlsEnabled(true);
 		mMap.getUiSettings().setCompassEnabled(true);
 		mMap.getUiSettings().setMyLocationButtonEnabled(true);
+		mMap.setMyLocationEnabled(true);
 
 		CameraPosition cameraPos = new CameraPosition.Builder()
-				.target(new LatLng(35.605123, 139.683530))
+				.target(new LatLng(35.605123, 139.683530)) // 初期位置：大岡山キャンパス
 				.zoom(DEFAULT_ZOOM_LEVEL)
 				.build();
 		mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPos));
@@ -127,6 +157,57 @@ public class MapsActivity extends FragmentActivity{
 			public void onCameraChange(CameraPosition cameraPosition){
 				calcLineWidth(cameraPosition.zoom);
 				drawLines();
+			}
+		});
+
+		mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener(){
+			@Override
+			public void onInfoWindowClick(Marker marker){
+				Log.i(TAG, "onInfoWindowClick");
+
+				LayoutInflater li = (LayoutInflater)getBaseContext()
+						.getSystemService(LAYOUT_INFLATER_SERVICE);
+				View popupView = li.inflate(R.layout.popup_window, null);
+
+				final EditText titleEdit = ((EditText)popupView.findViewById(R.id.titleEdit));
+				final EditText snippetEdit = ((EditText)popupView.findViewById(R.id.snippetEdit));
+				titleEdit.setText(marker.getTitle(), TextView.BufferType.EDITABLE);
+				snippetEdit.setText(marker.getSnippet(), TextView.BufferType.EDITABLE);
+
+				popupWindow = new PopupWindow(popupView,LayoutParams.WRAP_CONTENT,LayoutParams.WRAP_CONTENT);
+
+				final Marker m = marker;
+				Button ok = (Button)popupView.findViewById(R.id.ok);
+				ok.setOnClickListener(new Button.OnClickListener(){
+					@Override
+					public void onClick(View v){
+						Log.i(TAG, "ok");
+						m.setTitle(titleEdit.getText().toString());
+						m.setSnippet(snippetEdit.getText().toString());
+						m.hideInfoWindow();
+						m.showInfoWindow();
+
+						data.editMarkerOptions(m);
+						data.save(mapsActivity);
+						if(isServiceRunning(MyService.class))
+							sendData();
+
+						popupWindow.dismiss();
+					}
+				});
+				Button cancel = (Button)popupView.findViewById(R.id.cancel);
+				cancel.setOnClickListener(new Button.OnClickListener(){
+					@Override
+					public void onClick(View v){
+						Log.i(TAG, "canceled");
+						popupWindow.dismiss();
+					}
+				});
+
+				popupWindow.setFocusable(true);
+				popupWindow.setWidth(findViewById(R.id.map).getWidth() - 40);
+				popupWindow.update();
+				popupWindow.showAtLocation(findViewById(R.id.map), Gravity.CENTER, 0, 0);
 			}
 		});
 
@@ -141,27 +222,28 @@ public class MapsActivity extends FragmentActivity{
 		if(!previousPolylines.isEmpty())
 			for(Polyline p : previousPolylines)
 				p.remove();
-		if(previousCircle != null)
-			previousCircle.remove();
 
 		PolylineOptions geodesics;
 		for(PositionList pl : data.positionLists){
 			geodesics = new PolylineOptions()
 					.geodesic(true)
 					.color(Color.GREEN)
-					.width(lineWidth)
-					.zIndex(1);
+					.width(lineWidth);
 
 			for(double[] pos : pl){
 				geodesics.add(new LatLng(pos[0], pos[1]));
 			}
 			previousPolylines.add(mMap.addPolyline(geodesics));
 		}
+	}
 
-		if(lastPosition != null){
-			previousCircle = mMap.addCircle(new CircleOptions().center(lastPosition).fillColor(Color.CYAN).radius(3).strokeColor(Color.BLUE).strokeWidth(lineWidth / 20).zIndex(2));
+	private void showMarkers(){
+		Log.i(TAG, "showMarkers");
+		Marker marker;
+		for(SerializableMarkerOptions smo : data.markerOptionsList){
+			marker = mMap.addMarker(smo.toMarkerOptions());
+			smo.setId(marker.getId());
 		}
-
 	}
 
 	@Override
@@ -175,11 +257,14 @@ public class MapsActivity extends FragmentActivity{
 		super.onResume();
 		Log.i(TAG, "onResume");
 		setUpMapIfNeeded();
+		showMarkers();
 	}
 
 	@Override
 	protected void onPause() {
 		super.onPause();
+		if(popupWindow != null && popupWindow.isShowing())
+			popupWindow.dismiss();
 		Log.i(TAG, "onPause");
 	}
 
@@ -191,17 +276,22 @@ public class MapsActivity extends FragmentActivity{
 	}
 
 	void addNewPosition(double[] location){
-		lastPosition = new LatLng(location[0], location[1]);
 		data.addPosition(location);
 	}
 
 	private boolean isServiceRunning(Class<?> serviceClass) {
 		ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
-		for (RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+		for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
 			if (serviceClass.getName().equals(service.service.getClassName())) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	private void sendData(){
+		Intent intent = new Intent(this, MyService.class);
+		intent.putExtra("data", data);
+		startService(intent);
 	}
 }
