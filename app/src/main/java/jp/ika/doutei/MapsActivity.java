@@ -5,13 +5,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.Button;
@@ -35,15 +42,19 @@ import java.util.ArrayList;
 public class MapsActivity extends FragmentActivity{
 	private final static String TAG = "MainActivity";
 	final MapsActivity mapsActivity = this;
-	private final float DEFAULT_ZOOM_LEVEL = 14;
+	private final float DEFAULT_ZOOM_LEVEL = 16;
 	private GoogleMap mMap; // Might be null if Google Play services APK is not available.
 	private MainData data;
 	private ArrayList<Polyline> previousPolylines;
 	private float lineWidth;
 	private Receiver receiver;
-	private boolean markerAction;
+	private boolean markerMode;
+	private boolean autoRotateMode;
 	private ArrayList<Marker> markerList;
 	private PopupWindow popupWindow;
+	private SensorManager sensorManager;
+	private HandlerThread handlerThread;
+	private SensorEventListener sensorEventListener;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState){
@@ -60,7 +71,8 @@ public class MapsActivity extends FragmentActivity{
 
 		previousPolylines = new ArrayList<>();
 		markerList = new ArrayList<>();
-		markerAction = false;
+		markerMode = false;
+		autoRotateMode = false;
 		calcLineWidth(DEFAULT_ZOOM_LEVEL);
 		setUpMapIfNeeded();
 	}
@@ -72,6 +84,7 @@ public class MapsActivity extends FragmentActivity{
 		menu.add(Menu.NONE, 1, Menu.NONE, "OFF");
 		menu.add(Menu.NONE, 2, Menu.NONE, "CLEAR");
 		menu.add(Menu.NONE, 3, Menu.NONE, "MARKER");
+		menu.add(Menu.NONE, 4, Menu.NONE, "AUTO ROTATE");
 
 		return true;
 	}
@@ -105,8 +118,8 @@ public class MapsActivity extends FragmentActivity{
 				Toast.makeText(this, "CLEAR", Toast.LENGTH_LONG).show();
 				return true;
 			case 3:
-				markerAction = !markerAction;
-				if(markerAction){
+				if(!markerMode){
+					markerMode = true;
 					mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener(){
 						@Override
 						public void onMapClick(LatLng latLng){
@@ -120,14 +133,137 @@ public class MapsActivity extends FragmentActivity{
 							data.save(mapsActivity);
 							if(isServiceRunning(MyService.class)) sendData();
 
-							markerAction = false;
+							markerMode = false;
 							mMap.setOnMapClickListener(null);
 						}
 					});
+
+					Toast.makeText(this, "MARKER MODE ON", Toast.LENGTH_LONG).show();
 				}else{
+					markerMode = false;
 					mMap.setOnMapClickListener(null);
+
+					Toast.makeText(this, "MARKER MODE OFF", Toast.LENGTH_LONG).show();
 				}
 				return true;
+			case 4:
+				if(!autoRotateMode){
+					sensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
+					Sensor accSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+					Sensor magSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+					handlerThread = new HandlerThread("AutoRotate");
+					handlerThread.start();
+					Handler handler = new Handler(handlerThread.getLooper());
+					sensorEventListener = new SensorEventListener(){
+						private float[] accValues = new float[3];
+						private float[] magValues = new float[3];
+						private boolean rotateFlag = false;
+						private final static float alpha = 0.8F;
+
+						@Override
+						public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+
+						@Override
+						public void onSensorChanged(SensorEvent event){
+							if (event.accuracy == SensorManager.SENSOR_STATUS_UNRELIABLE)
+								return;
+
+							switch (event.sensor.getType()){
+								case Sensor.TYPE_ACCELEROMETER :
+									if(accValues == null){
+										accValues = event.values.clone();
+									}else{
+										accValues = weightedAverage(accValues, event.values.clone());
+									}
+									break;
+								case Sensor.TYPE_MAGNETIC_FIELD :
+									if(magValues == null){
+										magValues = event.values.clone();
+									}else{
+										magValues = weightedAverage(magValues, event.values.clone());
+									}
+									rotateFlag = true;
+									break;
+							}
+
+							if (accValues != null && magValues != null && rotateFlag) {
+								rotateFlag = false;
+								float[] R = new float[16];
+								float[] I = new float[16];
+
+								SensorManager.getRotationMatrix(R, I, accValues, magValues);
+
+								final float[] orientation = new float[3];
+								SensorManager.getOrientation(translateR(R), orientation);
+
+								runOnUiThread(new Runnable(){
+									@Override
+									public void run(){
+										cameraRotate((float) Math.toDegrees(orientation[0]));
+									}
+								});
+							}
+						}
+
+						private float[] weightedAverage(float[] values, float[] eventValues){
+							return new float[]{
+									weightedAverage(values[0], eventValues[0]),
+									weightedAverage(values[1], eventValues[1]),
+									weightedAverage(values[2], eventValues[2])
+							};
+						}
+
+						private float weightedAverage(float value, float eventValue){
+							return alpha * value + (1 - alpha) * eventValue;
+						}
+
+						// 画面の回転を考慮
+						private float[] translateR(float[] R){
+							float[] translatedR = new float[16];
+
+							int rotation =  mapsActivity.getWindowManager().getDefaultDisplay()
+									.getRotation();
+
+							switch(rotation){
+								case Surface.ROTATION_0 :
+									return R;
+								case Surface.ROTATION_90 :
+									SensorManager.remapCoordinateSystem(R, SensorManager.AXIS_Y,
+											SensorManager.AXIS_MINUS_X, translatedR);
+									break;
+								case Surface.ROTATION_180 :
+									SensorManager.remapCoordinateSystem(R, SensorManager.AXIS_MINUS_X,
+											SensorManager.AXIS_MINUS_Y, translatedR);
+									break;
+								case Surface.ROTATION_270 :
+									SensorManager.remapCoordinateSystem(R, SensorManager.AXIS_MINUS_Y,
+											SensorManager.AXIS_X, translatedR);
+									break;
+							}
+
+							return translatedR;
+						}
+					};
+
+					sensorManager.registerListener(sensorEventListener, accSensor,
+							SensorManager.SENSOR_DELAY_NORMAL, handler);
+					sensorManager.registerListener(sensorEventListener, magSensor,
+							SensorManager.SENSOR_DELAY_NORMAL, handler);
+
+					mapSettingsOff();
+					Toast.makeText(this, "AUTO-ROTATE MODE ON", Toast.LENGTH_LONG).show();
+					autoRotateMode = true;
+				}else{
+					if(sensorManager != null)
+						sensorManager.unregisterListener(sensorEventListener);
+					if(handlerThread.isAlive())
+						handlerThread.quitSafely();
+
+					mapSettingsOn();
+					Toast.makeText(this, "AUTO-ROTATE MODE OFF", Toast.LENGTH_LONG).show();
+					autoRotateMode = false;
+				}
+
 		}
 		return false;
 	}
@@ -145,10 +281,7 @@ public class MapsActivity extends FragmentActivity{
 	}
 
 	private void setUpMap(){
-		mMap.getUiSettings().setZoomControlsEnabled(true);
-		mMap.getUiSettings().setCompassEnabled(true);
-		mMap.getUiSettings().setMyLocationButtonEnabled(true);
-		mMap.setMyLocationEnabled(true);
+		mapSettingsOn();
 
 		CameraPosition cameraPos = new CameraPosition.Builder()
 				.target(new LatLng(35.605123, 139.683530)) // 初期位置：大岡山キャンパス
@@ -241,7 +374,7 @@ public class MapsActivity extends FragmentActivity{
 			}
 		});
 
-		//mMap.setMapType(GoogleMap.MAP_TYPE_NONE);
+		mMap.setMapType(GoogleMap.MAP_TYPE_NONE);
 	}
 
 	private void calcLineWidth(float zoom){
@@ -272,7 +405,6 @@ public class MapsActivity extends FragmentActivity{
 	}
 
 	private void showMarkers(){
-		Log.i(TAG, "showMarkers");
 		Marker marker;
 		for(SerializableMarkerOptions smo : data.markerOptionsList){
 			marker = mMap.addMarker(smo.toMarkerOptions());
@@ -310,6 +442,11 @@ public class MapsActivity extends FragmentActivity{
 		try{
 			unregisterReceiver(receiver);
 		}catch(IllegalArgumentException e){}
+		if(sensorManager != null)
+			sensorManager.unregisterListener(sensorEventListener);
+		if(handlerThread != null && handlerThread.isAlive())
+			handlerThread.quitSafely();
+
 		Log.i(TAG, "onStop");
 	}
 
@@ -331,5 +468,31 @@ public class MapsActivity extends FragmentActivity{
 		Intent intent = new Intent(this, MyService.class);
 		intent.putExtra("data", data);
 		startService(intent);
+	}
+
+	public void cameraRotate(float bearing){
+		CameraPosition cameraPos = CameraPosition.builder(mMap.getCameraPosition())
+				.target(new LatLng(mMap.getMyLocation().getLatitude(), mMap.getMyLocation().getLongitude()))
+				.bearing(bearing)
+				.build();
+
+		mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPos), 300, null);
+	}
+
+	private void mapSettingsOn(){
+		mMap.getUiSettings().setAllGesturesEnabled(true);
+		mMap.getUiSettings().setZoomControlsEnabled(true);
+		mMap.getUiSettings().setCompassEnabled(true);
+		mMap.getUiSettings().setMyLocationButtonEnabled(true);
+		mMap.getUiSettings().setIndoorLevelPickerEnabled(false);
+		mMap.getUiSettings().setMapToolbarEnabled(false);
+		mMap.setMyLocationEnabled(true);
+	}
+
+	private void mapSettingsOff(){
+		mMap.getUiSettings().setAllGesturesEnabled(false);
+		mMap.getUiSettings().setZoomControlsEnabled(false);
+		mMap.getUiSettings().setCompassEnabled(false);
+		mMap.getUiSettings().setMyLocationButtonEnabled(false);
 	}
 }

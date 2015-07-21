@@ -9,7 +9,6 @@ import android.location.Location;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -33,7 +32,6 @@ public class MyService extends Service implements GoogleApiClient
 	@Override
 	public IBinder onBind(Intent intent) {
 		Log.i(TAG, "onBind");
-		Toast.makeText(this, "onBind", Toast.LENGTH_SHORT).show();
 		return null;
 	}
 
@@ -41,7 +39,6 @@ public class MyService extends Service implements GoogleApiClient
 	public void onCreate() {
 		super.onCreate();
 		Log.i(TAG, "onCreate");
-		Toast.makeText(this, "MyService#onCreate", Toast.LENGTH_SHORT).show();
 
 		googleApiClient = new GoogleApiClient.Builder(this)
 				.addConnectionCallbacks(this)
@@ -62,7 +59,6 @@ public class MyService extends Service implements GoogleApiClient
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		super.onStartCommand(intent, flags, startId);
 		Log.i(TAG, "onStartCommand Received start id " + startId + ": " + intent);
-		Toast.makeText(this, "MyService#onStartCommand", Toast.LENGTH_SHORT).show();
 
 		if(intent != null)
 			data = (MainData)intent.getSerializableExtra("data");
@@ -79,7 +75,6 @@ public class MyService extends Service implements GoogleApiClient
 	public void onDestroy() {
 		super.onDestroy();
 		Log.i(TAG, "onDestroy");
-		Toast.makeText(this, "MyService#onDestroy", Toast.LENGTH_SHORT).show();
 		data.save(this);
 		stopLocationUpdates();
 		googleApiClient.disconnect();
@@ -89,24 +84,20 @@ public class MyService extends Service implements GoogleApiClient
 	@Override
 	public void onConnected(Bundle bundle) {
 		Log.i(TAG, "onConnected");
-		Toast.makeText(this, "onConnected", Toast.LENGTH_SHORT).show();
 		startLocationUpdates();
 	}
 
 	@Override
 	public void onConnectionSuspended(int cause) {
-		Toast.makeText(this, "onConnectionSuspended", Toast.LENGTH_SHORT).show();
 		Log.i(TAG, "onConnectionSuspended");
 	}
 
 	@Override
 	public void onConnectionFailed(ConnectionResult result) {
-		Toast.makeText(this, "onConnectionFailed", Toast.LENGTH_SHORT).show();
 		Log.i(TAG, "onConnectionFailed");
 	}
 	@Override
 	public void onLocationChanged(Location location) {
-		Toast.makeText(this, "onLocationChanged", Toast.LENGTH_SHORT).show();
 		Log.i(TAG, "onLocationChanged");
 		PositionUpdate(location);
 	}
@@ -128,7 +119,6 @@ public class MyService extends Service implements GoogleApiClient
 	}
 
 	private void showNotification() {
-		Log.d(TAG, "showNotification");
 		PendingIntent intent = PendingIntent.getActivity(this, 0, new Intent(this,
 				MapsActivity.class), 0);
 
