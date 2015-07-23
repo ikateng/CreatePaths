@@ -61,20 +61,14 @@ public class MapsActivity extends FragmentActivity{
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_maps);
 
-		receiver = new Receiver();
-		IntentFilter filter = new IntentFilter();
-		filter.addAction(MyService.ACTION);
-		registerReceiver(receiver, filter);
-
-		//MainData.deleteFile(this);
-		data = MainData.newInstance(this);
-
 		previousPolylines = new ArrayList<>();
 		markerList = new ArrayList<>();
 		markerMode = false;
 		autoRotateMode = false;
 		calcLineWidth(DEFAULT_ZOOM_LEVEL);
 		setUpMapIfNeeded();
+
+		Log.i(TAG, "onCreate");
 	}
 
 	@Override
@@ -417,6 +411,14 @@ public class MapsActivity extends FragmentActivity{
 	@Override
 	protected void onStart() {
 		super.onStart();
+
+		receiver = new Receiver();
+		IntentFilter filter = new IntentFilter();
+		filter.addAction(MyService.ACTION);
+		registerReceiver(receiver, filter);
+		
+		data = MainData.newInstance(this);
+
 		Log.i(TAG, "onStart");
 	}
 
